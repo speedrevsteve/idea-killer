@@ -4,11 +4,14 @@ import { useState, useRef } from "react";
 import StructuredResult from "@/components/StructuredResult";
 import NarrativeResult from "@/components/NarrativeResult";
 import HistoryTab from "@/components/HistoryTab";
+import IdeasTab from "@/components/IdeasTab";
+import SavedIdeasTab from "@/components/SavedIdeasTab";
 import { useHistory } from "@/lib/useHistory";
+import { useSavedIdeas } from "@/lib/useSavedIdeas";
 import type { Format, StructuredData } from "@/lib/types";
 
 type Status = "idle" | "loading" | "done" | "error";
-type Tab = "analyze" | "history";
+type Tab = "analyze" | "ideas" | "saved" | "history";
 
 export default function Home() {
   const [tab, setTab] = useState<Tab>("analyze");
@@ -20,6 +23,7 @@ export default function Home() {
   const [error, setError] = useState("");
   const abortRef = useRef<AbortController | null>(null);
   const { entries, addEntry, deleteEntry, clearAll } = useHistory();
+  const { saved, saveIdea, updateNotes, removeIdea, savedIds } = useSavedIdeas();
 
   async function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -106,17 +110,20 @@ export default function Home() {
 
           {/* Tabs */}
           <div className="flex rounded-lg overflow-hidden border border-zinc-800">
-            {(["analyze", "history"] as Tab[]).map((t) => (
+            {(["analyze", "ideas", "saved", "history"] as Tab[]).map((t) => (
               <button
                 key={t}
                 onClick={() => setTab(t)}
-                className={`px-4 py-2 text-xs font-medium capitalize transition-colors ${
+                className={`px-4 py-2 text-xs font-medium transition-colors ${
                   tab === t
                     ? "bg-zinc-800 text-white"
                     : "bg-zinc-900 text-zinc-500 hover:text-zinc-300"
                 }`}
               >
-                {t === "history" ? `History${entries.length > 0 ? ` (${entries.length})` : ""}` : "Analyze"}
+                {t === "analyze" && "Analyze"}
+                {t === "ideas" && "Suggest Ideas"}
+                {t === "saved" && `Saved${saved.length > 0 ? ` (${saved.length})` : ""}`}
+                {t === "history" && `History${entries.length > 0 ? ` (${entries.length})` : ""}`}
               </button>
             ))}
           </div>
@@ -204,6 +211,25 @@ export default function Home() {
               <NarrativeResult text={narrativeText} />
             )}
           </>
+        )}
+
+        {/* Ideas Tab */}
+        {tab === "ideas" && (
+          <IdeasTab
+            onSendToAnalyzer={(text) => { setIdea(text); setTab("analyze"); }}
+            onSaveIdea={saveIdea}
+            savedIds={savedIds}
+          />
+        )}
+
+        {/* Saved Ideas Tab */}
+        {tab === "saved" && (
+          <SavedIdeasTab
+            saved={saved}
+            onRemove={removeIdea}
+            onUpdateNotes={updateNotes}
+            onSendToAnalyzer={(text) => { setIdea(text); setTab("analyze"); }}
+          />
         )}
 
         {/* History Tab */}

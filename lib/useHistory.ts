@@ -3,53 +3,63 @@
 import { useState, useEffect } from "react";
 import type { HistoryEntry } from "./types";
 
-const STORAGE_KEY = "idea-killer-history";
-const MAX_ENTRIES = 50;
-
-function load(): HistoryEntry[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as HistoryEntry[]) : [];
-  } catch {
-    return [];
-  }
-}
-
-function save(entries: HistoryEntry[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
-}
-
 export function useHistory() {
   const [entries, setEntries] = useState<HistoryEntry[]>([]);
 
   useEffect(() => {
-    setEntries(load());
+    async function init() {
+      try {
+        // Migrate any existing localStorage data on first switch to file-based storage
+        const STORAGE_KEY = "idea-killer-history";
+        const MIGRATED_KEY = "idea-killer-migrated";
+        if (!localStorage.getItem(MIGRATED_KEY)) {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (raw) {
+            const localEntries = JSON.parse(raw) as HistoryEntry[];
+            if (localEntries.length > 0) {
+              await fetch("/api/history/migrate", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(localEntries),
+              });
+            }
+            localStorage.removeItem(STORAGE_KEY);
+          }
+          localStorage.setItem(MIGRATED_KEY, "1");
+        }
+
+        const res = await fetch("/api/history");
+        const data = await res.json();
+        setEntries(data as HistoryEntry[]);
+      } catch {
+        // ignore
+      }
+    }
+    init();
   }, []);
 
-  function addEntry(entry: Omit<HistoryEntry, "id" | "createdAt">) {
+  async function addEntry(entry: Omit<HistoryEntry, "id" | "createdAt">) {
     const newEntry: HistoryEntry = {
       ...entry,
       id: crypto.randomUUID(),
       createdAt: Date.now(),
     };
-    setEntries((prev) => {
-      const updated = [newEntry, ...prev].slice(0, MAX_ENTRIES);
-      save(updated);
-      return updated;
+    setEntries((prev) => [newEntry, ...prev].slice(0, 50));
+    await fetch("/api/history", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(newEntry),
     });
   }
 
-  function deleteEntry(id: string) {
-    setEntries((prev) => {
-      const updated = prev.filter((e) => e.id !== id);
-      save(updated);
-      return updated;
-    });
+  async function deleteEntry(id: string) {
+    setEntries((prev) => prev.filter((e) => e.id !== id));
+    await fetch(`/api/history?id=${id}`, { method: "DELETE" });
   }
 
-  function clearAll() {
-    localStorage.removeItem(STORAGE_KEY);
+  async function clearAll() {
     setEntries([]);
+    await fetch("/api/history?all=true", { method: "DELETE" });
   }
 
   return { entries, addEntry, deleteEntry, clearAll };

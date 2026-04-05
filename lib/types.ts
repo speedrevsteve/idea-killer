@@ -20,6 +20,20 @@ export type StructuredData = {
   bottom_line: string;
 };
 
+export type Idea = {
+  name: string;
+  tagline: string;
+  problem: string;
+  why_now: string;
+  model: string;
+};
+
+export type SavedIdea = Idea & {
+  id: string;
+  savedAt: number;
+  notes?: string;
+};
+
 export type HistoryEntry = {
   id: string;
   idea: string;
